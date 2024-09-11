@@ -12,43 +12,26 @@ show_menu() {
     echo -n "Введите номер опции: "
 }
 
-# Функция для скачивания и сжатия фильма
-download_and_compress() {
+# Функция для скачивания и сжатия фильма в реальном времени с использованием wget или curl
+download_and_compress_realtime() {
     local url="$1"
     local output="$2"
 
-    # Создание временного файла
-    temp_file=$(mktemp)
-
-    echo "Попытка скачать файл с помощью wget..."
-    # Попытка скачать файл с помощью wget с дополнительными параметрами
-    if wget -v --user-agent="Mozilla/5.0" --header="Accept: */*" --max-redirect=20 -O "$temp_file" "$url"; then
-        echo "Файл успешно скачан с помощью wget в $temp_file."
+    # Сначала пытаемся использовать wget
+    echo "Пытаемся скачать и сжать файл в реальном времени с помощью wget..."
+    if wget --user-agent="Mozilla/5.0" --header="Accept: */*" -O - "$url" | ffmpeg -i pipe:0 -c:v libvpx-vp9 -b:v 1M -c:a libopus "${output}.webm"; then
+        echo "Файл успешно скачан и сжат в реальном времени с использованием wget как ${output}.webm."
     else
-        echo "Ошибка при скачивании файла с помощью wget. Пробую использовать curl..."
+        echo "Ошибка при скачивании с использованием wget. Переход на curl..."
 
-        # Если wget не удалось, попробуем скачать файл с помощью curl
-        if curl -L -A "Mozilla/5.0" -o "$temp_file" "$url"; then
-            echo "Файл успешно скачан с помощью curl в $temp_file."
+        # Если wget не удался, используем curl
+        if curl -L -A "Mozilla/5.0" -o - "$url" | ffmpeg -i pipe:0 -c:v libvpx-vp9 -b:v 1M -c:a libopus "${output}.webm"; then
+            echo "Файл успешно скачан и сжат в реальном времени с использованием curl как ${output}.webm."
         else
-            echo "Ошибка при скачивании файла с помощью curl. Проверьте URL и интернет-соединение."
-            rm "$temp_file"
+            echo "Ошибка при скачивании и сжатии файла с использованием curl."
             return 1
         fi
     fi
-
-    # Сжатие данных с помощью ffmpeg
-    echo "Начинается сжатие файла..."
-    if ffmpeg -i "$temp_file" -c:v libvpx-vp9 -b:v 1M -c:a libopus "${output}.webm"; then
-        echo "Файл успешно сжат и сохранен как ${output}.webm."
-    else
-        echo "Ошибка при сжатии файла."
-        rm "$temp_file"
-        return 1
-    fi
-
-    # Удаление временного файла
-    rm "$temp_file"
 
     # Добавление информации о процессе в файл
     echo "$$ $output" >> $PROCESS_FILE
@@ -102,8 +85,8 @@ while true; do
             read -p "Введите URL для скачивания: " url
             read -p "Введите название выходного файла (без расширения): " output
 
-            # Запуск скачивания и сжатия в фоновом режиме
-            download_and_compress "$url" "$output" &
+            # Запуск скачивания и сжатия в реальном времени в фоновом режиме
+            download_and_compress_realtime "$url" "$output" &
             PID=$!
             echo "Процесс скачивания и сжатия начат с PID: $PID"
             # Наблюдение за вводом команды stop в основном процессе
