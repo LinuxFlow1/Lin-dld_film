@@ -17,13 +17,28 @@ download_and_compress() {
     read -p "Введите URL для скачивания: " url
     read -p "Введите название выходного файла (без расширения): " output
 
-    # Скачивание и сжатие в реальном времени в фоновом режиме
-    wget -qO- "$url" | ffmpeg -i pipe:0 -c:v libvpx-vp9 -b:v 1M -c:a libopus "${output}.webm" &
-    
-    # Сохранение PID фонового процесса и информации о процессе
-    PID=$!
-    echo "$PID $output" >> $PROCESS_FILE
-    echo "Процесс скачивания и сжатия начат с PID: $PID"
+    # Создание временного файла
+    temp_file=$(mktemp)
+
+    # Скачивание данных в временный файл
+    if wget -qO "$temp_file" "$url"; then
+        echo "Файл успешно скачан в $temp_file."
+
+        # Сжатие данных с помощью ffmpeg
+        if ffmpeg -i "$temp_file" -c:v libvpx-vp9 -b:v 1M -c:a libopus "${output}.webm"; then
+            echo "Файл успешно сжат и сохранен как ${output}.webm."
+        else
+            echo "Ошибка при сжатии файла."
+        fi
+
+        # Удаление временного файла
+        rm "$temp_file"
+    else
+        echo "Ошибка при скачивании файла."
+    fi
+
+    # Добавление информации о процессе в файл
+    echo "$$ $output" >> $PROCESS_FILE
 }
 
 # Функция для приостановки процесса
@@ -71,7 +86,9 @@ while true; do
     case $choice in
         1)
             download_and_compress &
-            # Наблюдение за вводом команды stop в другом процессе
+            PID=$!
+            echo "Процесс скачивания и сжатия начат с PID: $PID"
+            # Наблюдение за вводом команды stop в основном процессе
             while true; do
                 read -r input
                 if [[ "$input" == "stop" ]]; then
