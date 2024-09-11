@@ -85,7 +85,12 @@ while true; do
 
     case $choice in
         1)
-            download_and_compress &
+            # Запрос URL и названия выходного файла
+            read -p "Введите URL для скачивания: " url
+            read -p "Введите название выходного файла (без расширения): " output
+
+            # Запуск скачивания и сжатия в фоновом режиме
+            download_and_compress "$url" "$output" &
             PID=$!
             echo "Процесс скачивания и сжатия начат с PID: $PID"
             # Наблюдение за вводом команды stop в основном процессе
