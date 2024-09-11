@@ -14,28 +14,41 @@ show_menu() {
 
 # Функция для скачивания и сжатия фильма
 download_and_compress() {
-    read -p "Введите URL для скачивания: " url
-    read -p "Введите название выходного файла (без расширения): " output
+    local url="$1"
+    local output="$2"
 
     # Создание временного файла
     temp_file=$(mktemp)
 
-    # Скачивание данных в временный файл
-    if wget -qO "$temp_file" "$url"; then
-        echo "Файл успешно скачан в $temp_file."
-
-        # Сжатие данных с помощью ffmpeg
-        if ffmpeg -i "$temp_file" -c:v libvpx-vp9 -b:v 1M -c:a libopus "${output}.webm"; then
-            echo "Файл успешно сжат и сохранен как ${output}.webm."
-        else
-            echo "Ошибка при сжатии файла."
-        fi
-
-        # Удаление временного файла
-        rm "$temp_file"
+    echo "Попытка скачать файл с помощью wget..."
+    # Попытка скачать файл с помощью wget с дополнительными параметрами
+    if wget -v --user-agent="Mozilla/5.0" --header="Accept: */*" --max-redirect=20 -O "$temp_file" "$url"; then
+        echo "Файл успешно скачан с помощью wget в $temp_file."
     else
-        echo "Ошибка при скачивании файла."
+        echo "Ошибка при скачивании файла с помощью wget. Пробую использовать curl..."
+
+        # Если wget не удалось, попробуем скачать файл с помощью curl
+        if curl -L -A "Mozilla/5.0" -o "$temp_file" "$url"; then
+            echo "Файл успешно скачан с помощью curl в $temp_file."
+        else
+            echo "Ошибка при скачивании файла с помощью curl. Проверьте URL и интернет-соединение."
+            rm "$temp_file"
+            return 1
+        fi
     fi
+
+    # Сжатие данных с помощью ffmpeg
+    echo "Начинается сжатие файла..."
+    if ffmpeg -i "$temp_file" -c:v libvpx-vp9 -b:v 1M -c:a libopus "${output}.webm"; then
+        echo "Файл успешно сжат и сохранен как ${output}.webm."
+    else
+        echo "Ошибка при сжатии файла."
+        rm "$temp_file"
+        return 1
+    fi
+
+    # Удаление временного файла
+    rm "$temp_file"
 
     # Добавление информации о процессе в файл
     echo "$$ $output" >> $PROCESS_FILE
